@@ -61,7 +61,7 @@ function exit_on_error()
 ################################################################################
 function get_timestamp_nano ()
 {
-    echo $(date +"%F %T.%N")
+    echo $(gdate +"%F %T.%N")
 }
 
 
@@ -76,10 +76,10 @@ function get_timestamp_diff_nano ()
      local NANOSECONDS_DIFF
      local SECONDS_NANO
 
-     SECONDS_DIFF=$(echo $(date -d "${F_TIMESTAMP1}" +%s) \
-                      -  $(date -d "${F_TIMESTAMP2}" +%s)|bc)
-     NANOSECONDS_DIFF=$(echo $(date -d "${F_TIMESTAMP1}" +%N) \
-                          -  $(date -d "${F_TIMESTAMP2}" +%N)|bc)
+     SECONDS_DIFF=$(echo $(gdate -d "${F_TIMESTAMP1}" +%s) \
+                      -  $(gdate -d "${F_TIMESTAMP2}" +%s)|bc)
+     NANOSECONDS_DIFF=$(echo $(gdate -d "${F_TIMESTAMP1}" +%N) \
+                          -  $(gdate -d "${F_TIMESTAMP2}" +%N)|bc)
      SECONDS_NANO=$(echo ${SECONDS_DIFF} \* 1000000000|bc)
      printf "%d\n" $(((${SECONDS_NANO}  + ${NANOSECONDS_DIFF})))
 }
