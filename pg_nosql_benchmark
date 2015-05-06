@@ -51,6 +51,8 @@ PGDATABASE="benchmark"
 
 PGBIN="/usr/local/Cellar/postgresql/9.4.1/bin"
 
+export PATH=$PGBIN:$PATH
+
 ################################################################################
 # set mongo variables.
 ################################################################################
@@ -66,19 +68,31 @@ COLLECTION_NAME="json_tables"
 SAMPLEJSON="sample.json"
 PG_INSERTS="sample_pg_inserts.json"
 MONGO_INSERTS="sample_mongo_inserts.json"
+MYSQL_INSERTS="sample_mysql_inserts.json"
 
-export PATH=$PGBIN:$PATH
+################################################################################
+# set mysql variables.
+################################################################################
+MYSQL="/usr/local/bin/mysql"
+MYSQLIMPORT="/usr/local/bin/mysqlimport"
+MYSQLHOST="127.0.0.1"
+MYSQLPORT="3306"
+MYSQLUSER="root"
+MYSQLPASSWORD=""
+MYSQLDBNAME="benchmark"
+MYSQLFIELD="data"
 
 ################################################################################
 # source library files
 ################################################################################
 source ${DIRECTORY}/lib/pg_func_lib.sh
 source ${DIRECTORY}/lib/mongo_func_lib.sh
+source ${DIRECTORY}/lib/mysql_func_lib.sh
 
 ################################################################################
 # declare require arrays
 ################################################################################
-declare -a json_rows=(10000000)
+declare -a json_rows=(1000)
 
 declare -a pg_size_time
 declare -a pg_copy_time
@@ -90,6 +104,12 @@ declare -a mongo_size_time
 declare -a mongo_copy_time
 declare -a mongo_inserts_time
 declare -a mongo_select_time
+
+# mysql specific arrays
+declare -a mysql_size_time
+declare -a mysql_copy_time
+declare -a mysql_inserts_time
+declare -a mysql_select_time
 
 ################################################################################
 # main function
@@ -108,8 +128,16 @@ pg_version=$(pg_version "${PGHOST}"          \
                         "${PGPASSWORD}"
             )
 
+mysql_version=$(mysql_version "${MYSQLHOST}"     \
+                              "${MYSQLPORT}"     \
+                              "${MYSQLDBNAME}"   \
+                              "${MYSQLUSER}"     \
+                              "${MYSQLPASSWORD}"
+            )
+
 process_log "MongoDB Version $mongodb_version"
 process_log "PostgreSQL Version $pg_version"
+process_log "MySQL Version $mysql_version"
 
 
 for (( indx=0 ; indx < ${#json_rows[@]} ; indx++ ))
@@ -125,6 +153,9 @@ do
                            "${json_rows[${indx}]}" \
                            "${MONGO_INSERTS}"
 
+   mysql_json_insert_maker "${COLLECTION_NAME}"    \
+                           "${json_rows[${indx}]}" \
+                           "${MYSQL_INSERTS}"
 
    remove_pg_db "${PGHOST}"     \
                 "${PGPORT}"     \
@@ -136,6 +167,17 @@ do
                 "${PGDATABASE}" \
                 "${PGUSER}"     \
                 "${PGPASSWORD}"
+
+   remove_mysql_db "${MYSQLHOST}"     \
+                   "${MYSQLPORT}"     \
+                   "${MYSQLDBNAME}"   \
+                   "${MYSQLUSER}"     \
+                   "${MYSQLPASSWORD}"
+   create_mysql_db "${MYSQLHOST}"     \
+                   "${MYSQLPORT}"     \
+                   "${MYSQLDBNAME}"   \
+                   "${MYSQLUSER}"     \
+                   "${MYSQLPASSWORD}"
 
    drop_mongocollection "${MONGOHOST}"     \
                         "${MONGOPORT}"     \
@@ -150,6 +192,14 @@ do
                          "${PGUSER}"     \
                          "${PGPASSWORD}" \
                          "${COLLECTION_NAME}"
+   
+   mk_mysql_json_collection "${MYSQLHOST}"       \
+                            "${MYSQLPORT}"       \
+                            "${MYSQLDBNAME}"     \
+                            "${MYSQLUSER}"       \
+                            "${MYSQLPASSWORD}"   \
+                            "${COLLECTION_NAME}" \
+                            "${MYSQLFIELD}"
 
    pg_copy_time[${indx}]=$(pg_copy_benchmark  "${PGHOST}"          \
                                               "${PGPORT}"          \
@@ -159,7 +209,16 @@ do
                                               "${COLLECTION_NAME}" \
                                               "${SAMPLEJSON}"
                           )
-
+   
+   mysql_copy_time[${indx}]=0
+   # mysql_copy_time[${indx}]=$(mysql_copy_benchmark  "${MYSQLHOST}"       \
+   #                                                  "${MYSQLPORT}"       \
+   #                                                  "${MYSQLDBNAME}"     \
+   #                                                  "${MYSQLUSER}"       \
+   #                                                  "${MYSQLPASSWORD}"   \
+   #                                                  "${COLLECTION_NAME}" \
+   #                                                  "${SAMPLEJSON}"
+   #                        )
 
    pg_create_index_collection "${PGHOST}"     \
                               "${PGPORT}"     \
@@ -167,6 +226,14 @@ do
                               "${PGUSER}"     \
                               "${PGPASSWORD}" \
                               "${COLLECTION_NAME}"
+
+   # mysql_create_index_collection "${MYSQLHOST}"      \
+   #                               "${MYSQLPORT}"      \
+   #                               "${MYSQLDBNAME}"    \
+   #                               "${MYSQLUSER}"      \
+   #                               "${MYSQLPASSWORD}"  \
+   #                               "${COLLECTION_NAME}"\
+   #                               "${MYSQLFIELD}"
 
    mongo_copy_time[${indx}]=$(mongodb_import_benchmark "${MONGOHOST}"       \
                                                        "${MONGOPORT}"       \
@@ -198,6 +265,22 @@ do
                                             "${PGUSER}"     \
                                             "${PGPASSWORD}" \
                                             "${COLLECTION_NAME}"
+                          )
+   
+   mysql_select_time[${indx}]=$(mysql_select_benchmark "${MYSQLHOST}"      \
+                                                       "${MYSQLPORT}"      \
+                                                       "${MYSQLDBNAME}"    \
+                                                       "${MYSQLUSER}"      \
+                                                       "${MYSQLPASSWORD}"  \
+                                                       "${COLLECTION_NAME}"\
+                                                       "${MYSQLFIELD}"
+                            )
+   mysql_size_time[${indx}]=$(mysql_relation_size "${MYSQLHOST}"      \
+                                                  "${MYSQLPORT}"      \
+                                                  "${MYSQLDBNAME}"    \
+                                                  "${MYSQLUSER}"      \
+                                                  "${MYSQLPASSWORD}"  \
+                                                  "${COLLECTION_NAME}"
                           )
 
    mongo_select_time[${indx}]=$(mongodb_select_benchmark "${MONGOHOST}"     \
@@ -238,6 +321,13 @@ do
                     "${PGPASSWORD}"  \
                     "${COLLECTION_NAME}"
 
+   delete_mysql_json_data "${MYSQLHOST}"      \
+                          "${MYSQLPORT}"      \
+                          "${MYSQLDBNAME}"    \
+                          "${MYSQLUSER}"      \
+                          "${MYSQLPASSWORD}"  \
+                          "${COLLECTION_NAME}"
+
    pg_inserts_time[${indx}]=$(pg_inserts_benchmark  "${PGHOST}"          \
                                                     "${PGPORT}"          \
                                                     "${PGDATABASE}"      \
@@ -245,6 +335,14 @@ do
                                                     "${PGPASSWORD}"      \
                                                     "${COLLECTION_NAME}" \
                                                     "${PG_INSERTS}"
+                              )
+   mysql_inserts_time[${indx}]=$(mysql_inserts_benchmark  "${MYSQLHOST}"       \
+                                                          "${MYSQLPORT}"       \
+                                                          "${MYSQLDBNAME}"     \
+                                                          "${MYSQLUSER}"       \
+                                                          "${MYSQLPASSWORD}"   \
+                                                          "${COLLECTION_NAME}" \
+                                                          "${MYSQL_INSERTS}"
                               )
 done
 
@@ -254,6 +352,10 @@ print_result "PG COPY (ns)"       "${pg_copy_time[@]}"
 print_result "PG INSERT (ns)"     "${pg_inserts_time[@]}"
 print_result "PG SELECT (ns)"     "${pg_select_time[@]}"
 print_result "PG SIZE (bytes)"    "${pg_size_time[@]}"
+print_result "MySQL COPY (ns)"       "${mysql_copy_time[@]}"
+print_result "MySQL INSERT (ns)"     "${mysql_inserts_time[@]}"
+print_result "MySQL SELECT (ns)"     "${mysql_select_time[@]}"
+print_result "MySQL SIZE (bytes)"    "${mysql_size_time[@]}"
 print_result "MONGO IMPORT (ns)"  "${mongo_copy_time[@]}"
 print_result "MONGO INSERT (ns)"  "${mongo_inserts_time[@]}"
 print_result "MONGO SELECT (ns)"  "${mongo_select_time[@]}"
@@ -262,3 +364,4 @@ print_result "MONGO SIZE (bytes)" "${mongo_size_time[@]}"
 rm -rf ${SAMPLEJSON}*
 rm -rf ${PG_INSERTS}
 rm -rf ${MONGO_INSERTS}
+rm -rf ${MYSQL_INSERTS}
